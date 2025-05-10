@@ -63,7 +63,7 @@
 <body>
     <div class="container">
         <h1 class="text-2xl font-bold text-gray-800 mb-4">SRT Subtitle Time Adjuster</h1>
-        <p class="text-gray-600 mb-6">Upload an SRT file to adjust end times to match the next subtitle's start time.</p>
+        <p class="text-gray-600 mb-6">Upload an SRT file to adjust end times and convert English punctuation to Persian.</p>
         <label for="srtFile" class="custom-file-upload">Choose SRT File</label>
         <input type="file" id="srtFile" accept=".srt" onchange="handleFileUpload(event)">
         <div id="status" class="mt-4"></div>
@@ -80,9 +80,9 @@
                     const content = e.target.result;
                     const adjustedContent = adjustSrtTimes(content);
                     downloadAdjustedSrt(adjustedContent);
-                    document.getElementById('status').innerHTML = '<p class="success">File processed successfully! Download started.</p>';
+                    document.getElementById('status').innerHTML = '<p class="success">فایل با موفقیت پردازش شد! دانلود آغاز شد.</p>';
                 } catch (err) {
-                    document.getElementById('status').innerHTML = '<p class="error">Error processing file: ' + err.message + '</p>';
+                    document.getElementById('status').innerHTML = '<p class="error">خطا در پردازش فایل: ' + err.message + '</p>';
                 }
             };
             reader.readAsText(file);
@@ -107,7 +107,7 @@
                 } else if (currentSubtitle && line.includes('-->')) {
                     currentSubtitle.time = line;
                 } else if (currentSubtitle) {
-                    currentSubtitle.text.push(line);
+                    currentSubtitle.text.push(convertToPersian(line));
                 }
             }
             if (currentSubtitle) subtitles.push(currentSubtitle);
@@ -133,6 +133,43 @@
             return adjustedContent;
         }
 
+        function convertToPersian(text) {
+            // Convert English punctuation to Persian
+            const punctuationMap = {
+                ',': '،',
+                '"': '«',
+                '"': '»',
+                ';': '؛',
+                ':': ' : ',
+                '?': '؟',
+                '!': '!'
+            };
+
+            let converted = text;
+            for (const [en, fa] of Object.entries(punctuationMap)) {
+                converted = converted.replace(new RegExp(en, 'g'), fa);
+            }
+
+            // Handle English words to prevent text direction issues
+            const hasEnglish = /[a-zA-Z]/.test(converted);
+            if (hasEnglish) {
+                // Wrap text with RLM (Right-to-Left Mark) to ensure correct rendering
+                converted = `\u200F${converted}\u200F`;
+                // Split text to handle English words
+                const words = converted.split(' ');
+                const processedWords = words.map(word => {
+                    if (/[a-zA-Z]/.test(word)) {
+                        // Wrap English words to maintain order
+                        return `\u202A${word}\u202C`;
+                    }
+                    return word;
+                });
+                converted = processedWords.join(' ');
+            }
+
+            return converted;
+        }
+
         function downloadAdjustedSrt(content) {
             const blob = new Blob([content], { type: 'text/srt' });
             const url = URL.createObjectURL(blob);
@@ -140,7 +177,7 @@
             a.href = url;
             a.download = 'adjusted_subtitle.srt';
             a.className = 'download-btn';
-            a.textContent = 'Download Adjusted SRT';
+            a.textContent = 'دانلود فایل SRT اصلاح‌شده';
             document.getElementById('status').appendChild(a);
             a.click();
         }
