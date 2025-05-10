@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SRT Subtitle Time Adjuster</title>
+    <title>SRT Subtitle Time and Text Adjuster</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -22,6 +22,7 @@
             max-width: 600px;
             width: 100%;
             text-align: center;
+            direction: rtl;
         }
         input[type="file"] {
             display: none;
@@ -62,9 +63,9 @@
 </head>
 <body>
     <div class="container">
-        <h1 class="text-2xl font-bold text-gray-800 mb-4">SRT Subtitle Time Adjuster</h1>
-        <p class="text-gray-600 mb-6">Upload an SRT file to adjust end times to match the next subtitle's start time.</p>
-        <label for="srtFile" class="custom-file-upload">Choose SRT File</label>
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">اصلاح زیرنویس فارسی و زمان‌بندی</h1>
+        <p class="text-gray-600 mb-6">فایل SRT فارسی را آپلود کنید تا متن معکوس اصلاح شود و زمان‌بندی‌ها تنظیم شوند.</p>
+        <label for="srtFile" class="custom-file-upload">انتخاب فایل SRT</label>
         <input type="file" id="srtFile" accept=".srt" onchange="handleFileUpload(event)">
         <div id="status" class="mt-4"></div>
     </div>
@@ -78,17 +79,17 @@
             reader.onload = function(e) {
                 try {
                     const content = e.target.result;
-                    const adjustedContent = adjustSrtTimes(content);
+                    const adjustedContent = adjustSrtTimesAndText(content);
                     downloadAdjustedSrt(adjustedContent);
-                    document.getElementById('status').innerHTML = '<p class="success">File processed successfully! Download started.</p>';
+                    document.getElementById('status').innerHTML = '<p class="success">فایل با موفقیت پردازش شد! دانلود آغاز شد.</p>';
                 } catch (err) {
-                    document.getElementById('status').innerHTML = '<p class="error">Error processing file: ' + err.message + '</p>';
+                    document.getElementById('status').innerHTML = '<p class="error">خطا در پردازش فایل: ' + err.message + '</p>';
                 }
             };
-            reader.readAsText(file);
+            reader.readAsText(file, 'UTF-8');
         }
 
-        function adjustSrtTimes(content) {
+        function adjustSrtTimesAndText(content) {
             const lines = content.split('\n');
             const subtitles = [];
             let currentSubtitle = null;
@@ -112,6 +113,11 @@
             }
             if (currentSubtitle) subtitles.push(currentSubtitle);
 
+            // Fix reversed Persian text
+            for (let subtitle of subtitles) {
+                subtitle.text = subtitle.text.map(line => fixPersianText(line));
+            }
+
             // Adjust end times
             for (let i = 0; i < subtitles.length - 1; i++) {
                 const current = subtitles[i];
@@ -133,14 +139,28 @@
             return adjustedContent;
         }
 
+        function fixPersianText(text) {
+            // Check if text is reversed by looking for common Persian patterns
+            const persianRegex = /[\u0600-\u06FF]/;
+            if (!persianRegex.test(text)) return text;
+
+            // Split text into words and reverse their order if they seem reversed
+            const words = text.trim().split(/\s+/);
+            const isReversed = words.some(word => word.match(/^[a-zA-Z0-9]/)) || words[0].match(/[\u0600-\u06FF]$/);
+            if (isReversed) {
+                return words.reverse().join(' ');
+            }
+            return text;
+        }
+
         function downloadAdjustedSrt(content) {
-            const blob = new Blob([content], { type: 'text/srt' });
+            const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), content], { type: 'text/srt;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = 'adjusted_subtitle.srt';
             a.className = 'download-btn';
-            a.textContent = 'Download Adjusted SRT';
+            a.textContent = 'دانلود فایل SRT اصلاح‌شده';
             document.getElementById('status').appendChild(a);
             a.click();
         }
