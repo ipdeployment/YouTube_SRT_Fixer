@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SRT Subtitle Time Adjuster</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Inter', sans-serif;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .custom-file-upload {
+            background-color: #3b82f6;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .custom-file-upload:hover {
+            background-color: #1e40af;
+        }
+        .download-btn {
+            background-color: #10b981;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 1rem;
+            transition: background-color 0.3s;
+        }
+        .download-btn:hover {
+            background-color: #059669;
+        }
+        .error {
+            color: #ef4444;
+            margin-top: 1rem;
+        }
+        .success {
+            color: #10b981;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">SRT Subtitle Time Adjuster</h1>
+        <p class="text-gray-600 mb-6">Upload an SRT file to adjust end times to match the next subtitle's start time.</p>
+        <label for="srtFile" class="custom-file-upload">Choose SRT File</label>
+        <input type="file" id="srtFile" accept=".srt" onchange="handleFileUpload(event)">
+        <div id="status" class="mt-4"></div>
+    </div>
+
+    <script>
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const content = e.target.result;
+                    const adjustedContent = adjustSrtTimes(content);
+                    downloadAdjustedSrt(adjustedContent);
+                    document.getElementById('status').innerHTML = '<p class="success">File processed successfully! Download started.</p>';
+                } catch (err) {
+                    document.getElementById('status').innerHTML = '<p class="error">Error processing file: ' + err.message + '</p>';
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function adjustSrtTimes(content) {
+            const lines = content.split('\n');
+            const subtitles = [];
+            let currentSubtitle = null;
+
+            // Parse SRT file
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) {
+                    if (currentSubtitle) subtitles.push(currentSubtitle);
+                    currentSubtitle = null;
+                    continue;
+                }
+
+                if (!currentSubtitle && /^\d+$/.test(line)) {
+                    currentSubtitle = { index: parseInt(line), time: '', text: [] };
+                } else if (currentSubtitle && line.includes('-->')) {
+                    currentSubtitle.time = line;
+                } else if (currentSubtitle) {
+                    currentSubtitle.text.push(line);
+                }
+            }
+            if (currentSubtitle) subtitles.push(currentSubtitle);
+
+            // Adjust end times
+            for (let i = 0; i < subtitles.length - 1; i++) {
+                const current = subtitles[i];
+                const next = subtitles[i + 1];
+                const nextStartTime = next.time.split('-->')[0].trim();
+                const currentParts = current.time.split('-->');
+                currentParts[1] = ' ' + nextStartTime;
+                current.time = currentParts.join('-->');
+            }
+
+            // Rebuild SRT content
+            let adjustedContent = '';
+            for (const subtitle of subtitles) {
+                adjustedContent += subtitle.index + '\n';
+                adjustedContent += subtitle.time + '\n';
+                adjustedContent += subtitle.text.join('\n') + '\n\n';
+            }
+
+            return adjustedContent;
+        }
+
+        function downloadAdjustedSrt(content) {
+            const blob = new Blob([content], { type: 'text/srt' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'adjusted_subtitle.srt';
+            a.className = 'download-btn';
+            a.textContent = 'Download Adjusted SRT';
+            document.getElementById('status').appendChild(a);
+            a.click();
+        }
+    </script>
+</body>
+</html>
